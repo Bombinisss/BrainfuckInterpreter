@@ -1,4 +1,4 @@
-use egui::{Color32, Painter, Pos2, Rect, Stroke};
+use egui::{Color32, Painter, Pos2, Rect, Stroke, Vec2};
 use egui_file_dialog::FileDialog;
 use std::thread;
 use std::time::Duration;
@@ -16,6 +16,12 @@ pub struct BrainfuckInterpreterInterface {
     frame_count: usize,
     #[serde(skip)]
     last_update_time: std::time::Instant,
+    #[serde(skip)]
+    input_text: String,
+    #[serde(skip)]
+    input_brainfuck: String,
+    #[serde(skip)]
+    output: String,
 }
 
 impl Default for BrainfuckInterpreterInterface {
@@ -31,6 +37,9 @@ impl Default for BrainfuckInterpreterInterface {
             letter_index: 0,
             frame_count: 0,
             last_update_time: std::time::Instant::now(),
+            input_text: "".to_string(),
+            input_brainfuck: "".to_string(),
+            output: "".to_string(),
         }
     }
 }
@@ -58,15 +67,6 @@ impl eframe::App for BrainfuckInterpreterInterface {
         // For inspiration and more examples, go to https://emilk.github.io/egui
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            let app_rect = ui.max_rect();
-            let title_bar_height = 32.0;
-            let title_bar_rect = {
-                let mut rect = app_rect;
-                rect.max.y = rect.min.y + title_bar_height;
-                rect
-            };
-            title_bar_ui(ui, title_bar_rect, "Brain Fuck Interpreter", self);
-            // The top panel is often a good place for a menu bar:
 
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
@@ -81,14 +81,35 @@ impl eframe::App for BrainfuckInterpreterInterface {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-
-            ui.separator();
-
-            ui.hyperlink_to(
-                "Source code",
-                "https://github.com/Bombinisss/BrainfuckInterpreter/",
+            
+            ui.heading("Brainfuck code");
+            
+            let available_size = Vec2::new(ui.available_width(),0.0); // Remaining space in the panel
+            ui.add_sized(
+                available_size, // Use the available size
+                egui::TextEdit::multiline(&mut self.input_brainfuck)
+                    .hint_text("Type brainfuck here..."),
             );
-
+            
+            ui.add_space(10.0);
+            
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.heading("Output");
+                    ui.add(
+                        egui::TextEdit::multiline(&mut self.output)
+                            .hint_text("This is output-only")
+                            .interactive(false),
+                    );
+                    ui.add_space(10.0);
+                    ui.heading("Input");
+                    ui.text_edit_multiline(&mut self.input_text);
+                });
+                
+                //boxes here
+                
+            });
+            
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 powered_by_egui_and_eframe(ui);
                 egui::warn_if_debug_build(ui);
@@ -114,87 +135,8 @@ fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
         );
         ui.label(".");
     });
-}
-
-fn title_bar_ui(
-    ui: &mut egui::Ui,
-    title_bar_rect: eframe::epaint::Rect,
-    title: &str,
-    x: &mut BrainfuckInterpreterInterface,
-) {
-    use egui::*;
-
-    let painter = ui.painter();
-
-    let title_bar_response = ui.interact(title_bar_rect, Id::new("title_bar"), Sense::click());
-
-    // Paint the title:
-    painter.text(
-        title_bar_rect.center(),
-        Align2::CENTER_CENTER,
-        title,
-        FontId::proportional(20.0),
-        ui.style().visuals.text_color(),
-    );
-
-    // Interact with the title bar (drag to move window):
-    if title_bar_response.double_clicked() {
-        let is_maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
-        ui.ctx()
-            .send_viewport_cmd(ViewportCommand::Maximized(!is_maximized));
-    }
-
-    if title_bar_response.is_pointer_button_down_on() {
-        ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
-    }
-
-    let ui_builder = UiBuilder::new().max_rect(title_bar_rect); // Set the max_rect to the title bar rect
-    ui.allocate_new_ui(ui_builder, |ui| {
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.spacing_mut().item_spacing.x = 0.0;
-            ui.visuals_mut().button_frame = false;
-            ui.add_space(8.0);
-            close_maximize_minimize(ui);
-        });
-    });
-}
-
-fn close_maximize_minimize(ui: &mut egui::Ui) {
-    use egui::{Button, RichText};
-
-    let button_height = 12.0;
-
-    let close_response = ui
-        .add(Button::new(RichText::new(" ❎").size(button_height)))
-        .on_hover_text("Close the window");
-    if close_response.clicked() {
-        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-    }
-
-    let is_maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
-    if is_maximized {
-        let maximized_response = ui
-            .add(Button::new(RichText::new(" 🗗").size(button_height)))
-            .on_hover_text("Restore window");
-        if maximized_response.clicked() {
-            ui.ctx()
-                .send_viewport_cmd(egui::ViewportCommand::Maximized(false));
-        }
-    } else {
-        let maximized_response = ui
-            .add(Button::new(RichText::new(" 🗖").size(button_height)))
-            .on_hover_text("Maximize window");
-        if maximized_response.clicked() {
-            ui.ctx()
-                .send_viewport_cmd(egui::ViewportCommand::Maximized(true));
-        }
-    }
-
-    let minimized_response = ui
-        .add(Button::new(RichText::new("➖").size(button_height)))
-        .on_hover_text("Minimize the window");
-    if minimized_response.clicked() {
-        ui.ctx()
-            .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-    }
+    ui.hyperlink_to(
+                "Source code",
+                "https://github.com/Bombinisss/BrainfuckInterpreter/");
+    ui.separator();
 }

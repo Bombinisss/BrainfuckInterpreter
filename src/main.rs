@@ -11,7 +11,7 @@ fn main() -> eframe::Result<()> {
             .with_inner_size([700.0, 500.0])
             .with_min_inner_size([600.0, 420.0])
             .with_transparent(true)
-            .with_decorations(false) // Hide the OS-specific "chrome" around the window
+            .with_decorations(true) // Hide the OS-specific "chrome" around the window
             .with_resizable(true),
         vsync: false,
         multisampling: 0,
@@ -29,7 +29,7 @@ fn main() -> eframe::Result<()> {
         persistence_path: None,
     };
     eframe::run_native(
-        "Encrypto",
+        "Brainfuck Interpreter",
         native_options,
         Box::new(|cc| Ok(Box::new(brain_fuck_interpreter::BrainfuckInterpreterInterface::new(cc)))),
     )
