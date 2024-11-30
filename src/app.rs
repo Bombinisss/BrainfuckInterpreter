@@ -1,6 +1,5 @@
 use egui::{Color32, Painter, Pos2, Rect, Stroke, Vec2};
 use egui_file_dialog::FileDialog;
-use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -94,8 +93,7 @@ impl BrainfuckInterpreterInterface {
         }));
     }
     pub fn stop_interpreter(&mut self) {
-        let mut timer_running = self.timer_running.lock().unwrap();
-        *timer_running = false;
+        *self.timer_running.lock().unwrap() = false;
         if let Some(handle) = self.timer_thread_handle.take() {
             handle.join().unwrap();
         }
@@ -124,6 +122,9 @@ impl eframe::App for BrainfuckInterpreterInterface {
 
                 if ui.button("Run").clicked() && !*self.timer_running.lock().unwrap() {
                     self.start_interpreter();
+                };
+                if ui.button("Stop").clicked() && *self.timer_running.lock().unwrap() {
+                    self.stop_interpreter();
                 };
             });
 
