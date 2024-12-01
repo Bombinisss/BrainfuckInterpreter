@@ -8,27 +8,27 @@ use std::time::{Duration, Instant};
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct BrainfuckInterpreterInterface {
-    path: String,
+    pub(crate) path: String,
     #[serde(skip)]
     file_dialog: FileDialog,
     #[serde(skip)]
-    letter_index: Arc<Mutex<usize>>,
+    pub(crate) letter_index: Arc<Mutex<usize>>,
     #[serde(skip)]
-    box_index: Arc<Mutex<usize>>,
+    pub(crate) box_index: Arc<Mutex<usize>>,
     #[serde(skip)]
     last_update_time: Instant,
     #[serde(skip)]
-    input_text: Arc<Mutex<String>>,
+    pub(crate) input_text: Arc<Mutex<String>>,
     #[serde(skip)]
-    input_brainfuck: Arc<Mutex<String>>,
+    pub(crate) input_brainfuck: Arc<Mutex<String>>,
     #[serde(skip)]
-    output: Arc<Mutex<String>>,
+    pub(crate) output: Arc<Mutex<String>>,
     #[serde(skip)]
-    data: Arc<Mutex<Vec<u8>>>,
+    pub(crate) data: Arc<Mutex<Vec<u8>>>,
     #[serde(skip)]
-    timer_running: Arc<Mutex<bool>>,
+    pub(crate) timer_running: Arc<Mutex<bool>>,
     #[serde(skip)]
-    timer_thread_handle: Option<thread::JoinHandle<()>>,
+    pub(crate) timer_thread_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl Default for BrainfuckInterpreterInterface {
@@ -108,23 +108,28 @@ impl BrainfuckInterpreterInterface {
                     '>' => {
                         data_pointer += 1;
                         instruction_pointer += 1;
+                        thread::sleep(Duration::from_millis(5));
                     }
                     '<' => {
                         data_pointer -= 1;
                         instruction_pointer += 1;
+                        thread::sleep(Duration::from_millis(5));
                     }
                     '+' => {
                         data_arc.lock().unwrap()[data_pointer] += 1;
                         instruction_pointer += 1;
+                        thread::sleep(Duration::from_millis(5));
                     }
                     '-' => {
                         data_arc.lock().unwrap()[data_pointer] -= 1;
                         instruction_pointer += 1;
+                        thread::sleep(Duration::from_millis(5));
                     }
                     '.' => {
                         *output_brainfuck.lock().unwrap() +=
                             &*String::from(data_arc.lock().unwrap()[data_pointer] as char);
                         instruction_pointer += 1;
+                        thread::sleep(Duration::from_millis(5));
                     }
                     ',' => {
                         data_arc.lock().unwrap()[data_pointer] =
@@ -134,6 +139,7 @@ impl BrainfuckInterpreterInterface {
                             locked_text.drain(..1);
                         }
                         instruction_pointer += 1;
+                        thread::sleep(Duration::from_millis(5));
                     }
                     '[' => {
                         if data_arc.lock().unwrap()[data_pointer] == 0 {
@@ -151,8 +157,10 @@ impl BrainfuckInterpreterInterface {
                                 pos += 1;
                             }
                             instruction_pointer = pos;
+                            thread::sleep(Duration::from_millis(5));
                         } else {
                             instruction_pointer += 1;
+                            thread::sleep(Duration::from_millis(5));
                         }
                     }
                     ']' => {
@@ -176,8 +184,10 @@ impl BrainfuckInterpreterInterface {
                                 pos -= 1;
                             }
                             instruction_pointer = pos + 1;
+                            thread::sleep(Duration::from_millis(5));
                         } else {
                             instruction_pointer += 1;
+                            thread::sleep(Duration::from_millis(5));
                         }
                     }
                     _ => {
@@ -186,7 +196,6 @@ impl BrainfuckInterpreterInterface {
                 }
 
                 *box_index_arc.lock().unwrap() = data_pointer;
-                thread::sleep(Duration::from_millis(5));
             }
             return;
         }));
@@ -215,7 +224,7 @@ impl eframe::App for BrainfuckInterpreterInterface {
             });
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ctx, |ui| { // TODO: Add scroll
             ui.horizontal(|ui| {
                 ui.heading("Brainfuck code");
 
