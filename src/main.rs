@@ -8,7 +8,7 @@ fn main() -> eframe::Result<()> {
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([720.0, 500.0])
+            .with_inner_size([830.0, 675.0])
             .with_min_inner_size([600.0, 420.0])
             .with_transparent(true)
             .with_decorations(true) // Hide the OS-specific "chrome" around the window

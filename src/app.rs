@@ -1,4 +1,4 @@
-use egui::{Color32, Painter, Pos2, Rect, Stroke, Vec2};
+use egui::{Color32, Vec2};
 use egui_file_dialog::FileDialog;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -12,7 +12,9 @@ pub struct BrainfuckInterpreterInterface {
     #[serde(skip)]
     file_dialog: FileDialog,
     #[serde(skip)]
-    letter_index: Arc<Mutex<i64>>,
+    letter_index: Arc<Mutex<usize>>,
+    #[serde(skip)]
+    box_index: Arc<Mutex<usize>>,
     #[serde(skip)]
     last_update_time: Instant,
     #[serde(skip)]
@@ -22,7 +24,7 @@ pub struct BrainfuckInterpreterInterface {
     #[serde(skip)]
     output: Arc<Mutex<String>>,
     #[serde(skip)]
-    data: Arc<Mutex<Vec<i32>>>,
+    data: Arc<Mutex<Vec<u8>>>,
     #[serde(skip)]
     timer_running: Arc<Mutex<bool>>,
     #[serde(skip)]
@@ -39,12 +41,13 @@ impl Default for BrainfuckInterpreterInterface {
                 .max_size([595.0, 375.0])
                 .resizable(false)
                 .movable(false),
-            letter_index: Arc::new(Mutex::new(-1)),
+            letter_index: Arc::new(Mutex::new(0)),
+            box_index: Arc::new(Mutex::new(0)),
             last_update_time: std::time::Instant::now(),
             input_text: Arc::new(Mutex::new("".to_string())),
             input_brainfuck: Arc::new(Mutex::new("".to_string())),
             output: Arc::new(Mutex::new("".to_string())),
-            data: Arc::new(Mutex::new(vec![0; 32])),
+            data: Arc::new(Mutex::new(vec![0; 256])),
             timer_running: Arc::new(Mutex::new(false)),
             timer_thread_handle: None,
         }
@@ -64,32 +67,128 @@ impl BrainfuckInterpreterInterface {
         Default::default()
     }
     pub fn start_interpreter(&mut self) {
-        // Start the timer on a separate thread if it is not already running
         let timer_running = Arc::clone(&self.timer_running);
         let data_arc = Arc::clone(&self.data);
-        let letter_index_arc = Arc::clone(&self.letter_index);
+        let box_index_arc = Arc::clone(&self.box_index);
         let input_brainfuck = Arc::clone(&self.input_brainfuck);
         let input_text = Arc::clone(&self.input_text);
         let output_brainfuck = Arc::clone(&self.output);
-        
-        if *timer_running.lock().unwrap() {
-            return; // Timer is already running
+
+        if let Some(handle) = self.timer_thread_handle.take() {
+            handle.join().unwrap();
         }
+
+        if *timer_running.lock().unwrap() || input_brainfuck.lock().unwrap().is_empty() {
+            return; // Timer is already running or input is empty
+        }
+
+        data_arc.lock().unwrap().fill(0);
+        output_brainfuck.lock().unwrap().clear();
 
         *timer_running.lock().unwrap() = true;
 
         // Spawn a thread for the timer
         self.timer_thread_handle = Some(thread::spawn(move || {
+            let mut data_pointer: usize = 0;
+            let mut instruction_pointer: usize = 0;
+
             while *timer_running.lock().unwrap() {
-                let mut letter_index = letter_index_arc.lock().unwrap().clone();
-                let data_length = data_arc.lock().unwrap().len();
-                letter_index = (letter_index + 1i64) % data_length as i64;
-                *letter_index_arc.lock().unwrap()=letter_index;
-                
-                //TODO: Add brainfuck logic here
-                
-                thread::sleep(Duration::from_millis(100));
+                if instruction_pointer >= input_brainfuck.lock().unwrap().len() {
+                    *timer_running.lock().unwrap() = false;
+                    break;
+                }
+                let instruction = input_brainfuck
+                    .lock()
+                    .unwrap()
+                    .chars()
+                    .nth(instruction_pointer)
+                    .unwrap();
+
+                match instruction {
+                    '>' => {
+                        data_pointer += 1;
+                        instruction_pointer += 1;
+                    }
+                    '<' => {
+                        data_pointer -= 1;
+                        instruction_pointer += 1;
+                    }
+                    '+' => {
+                        data_arc.lock().unwrap()[data_pointer] += 1;
+                        instruction_pointer += 1;
+                    }
+                    '-' => {
+                        data_arc.lock().unwrap()[data_pointer] -= 1;
+                        instruction_pointer += 1;
+                    }
+                    '.' => {
+                        *output_brainfuck.lock().unwrap() +=
+                            &*String::from(data_arc.lock().unwrap()[data_pointer] as char);
+                        instruction_pointer += 1;
+                    }
+                    ',' => {
+                        data_arc.lock().unwrap()[data_pointer] =
+                            input_text.lock().unwrap().chars().nth(0).unwrap() as u8; // TODO: Throw error on empty input or wait
+                        let mut locked_text = input_text.lock().unwrap();
+                        if !locked_text.is_empty() {
+                            locked_text.drain(..1);
+                        }
+                        instruction_pointer += 1;
+                    }
+                    '[' => {
+                        if data_arc.lock().unwrap()[data_pointer] == 0 {
+                            let mut bracket_nesting = 1;
+                            let code_length = input_brainfuck.lock().unwrap().len();
+                            let mut pos = instruction_pointer + 1;
+                            while pos < code_length && bracket_nesting > 0 {
+                                let instruction =
+                                    input_brainfuck.lock().unwrap().chars().nth(pos).unwrap();
+                                if instruction == '[' {
+                                    bracket_nesting += 1;
+                                } else if instruction == ']' {
+                                    bracket_nesting -= 1;
+                                }
+                                pos += 1;
+                            }
+                            instruction_pointer = pos;
+                        } else {
+                            instruction_pointer += 1;
+                        }
+                    }
+                    ']' => {
+                        if data_arc.lock().unwrap()[data_pointer] != 0 {
+                            let mut bracket_nesting = 1;
+                            if instruction_pointer == 0 {
+                                break;
+                            }
+                            let mut pos = instruction_pointer - 1;
+                            while pos > 0 && bracket_nesting > 0 {
+                                let instruction =
+                                    input_brainfuck.lock().unwrap().chars().nth(pos).unwrap();
+                                if instruction == ']' {
+                                    bracket_nesting += 1;
+                                } else if instruction == '[' {
+                                    bracket_nesting -= 1;
+                                }
+                                if pos == 0 {
+                                    break;
+                                }
+                                pos -= 1;
+                            }
+                            instruction_pointer = pos + 1;
+                        } else {
+                            instruction_pointer += 1;
+                        }
+                    }
+                    _ => {
+                        instruction_pointer += 1;
+                    }
+                }
+
+                *box_index_arc.lock().unwrap() = data_pointer;
+                thread::sleep(Duration::from_millis(5));
             }
+            return;
         }));
     }
     pub fn stop_interpreter(&mut self) {
@@ -129,14 +228,23 @@ impl eframe::App for BrainfuckInterpreterInterface {
             });
 
             let available_size = Vec2::new(ui.available_width(), 0.0);
-            ui.add_sized(
-                available_size, // Use the available size
-                egui::TextEdit::multiline(&mut *self.input_brainfuck.lock().unwrap())
-                    .hint_text("Type brainfuck here..."),
-            );
+            if !*self.timer_running.lock().unwrap() {
+                ui.add_sized(
+                    available_size,
+                    egui::TextEdit::multiline(&mut *self.input_brainfuck.lock().unwrap())
+                        .hint_text("Type brainfuck here..."),
+                );
+            } else {
+                ui.add_sized(
+                    available_size,
+                    egui::TextEdit::multiline(&mut *self.input_brainfuck.lock().unwrap())
+                        .hint_text("Type brainfuck here...")
+                        .interactive(false),
+                );
+            }
 
             ui.add_space(10.0);
-            let box_size = 50.0;
+            let box_size = 30.0;
             let highlight_color = Color32::RED;
 
             ui.horizontal(|ui| {
@@ -160,11 +268,9 @@ impl eframe::App for BrainfuckInterpreterInterface {
 
                     ui.horizontal_wrapped(|ui| {
                         for (i, value) in self.data.lock().unwrap().iter().enumerate() {
-                            // Allocate space for each box
                             let (_, rect) = ui.allocate_space([box_size, box_size].into());
 
-                            // Highlight logic for the selected box
-                            let rect_color = if i == *self.letter_index.lock().unwrap() as usize {
+                            let rect_color = if i == *self.box_index.lock().unwrap() as usize {
                                 highlight_color
                             } else {
                                 Color32::GRAY
