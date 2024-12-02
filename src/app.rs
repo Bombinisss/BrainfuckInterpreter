@@ -16,6 +16,8 @@ pub struct BrainfuckInterpreterInterface {
     #[serde(skip)]
     pub(crate) box_index: Arc<Mutex<usize>>,
     #[serde(skip)]
+    pub(crate) delay: Arc<Mutex<u64>>,
+    #[serde(skip)]
     last_update_time: Instant,
     #[serde(skip)]
     pub(crate) input_text: Arc<Mutex<String>>,
@@ -43,6 +45,7 @@ impl Default for BrainfuckInterpreterInterface {
                 .movable(false),
             letter_index: Arc::new(Mutex::new(0)),
             box_index: Arc::new(Mutex::new(0)),
+            delay: Arc::new(Mutex::new(5u64)),
             last_update_time: std::time::Instant::now(),
             input_text: Arc::new(Mutex::new("".to_string())),
             input_brainfuck: Arc::new(Mutex::new("".to_string())),
@@ -73,6 +76,7 @@ impl BrainfuckInterpreterInterface {
         let input_brainfuck = Arc::clone(&self.input_brainfuck);
         let input_text = Arc::clone(&self.input_text);
         let output_brainfuck = Arc::clone(&self.output);
+        let delay_arc = Arc::clone(&self.delay);
 
         if let Some(handle) = self.timer_thread_handle.take() {
             handle.join().unwrap();
@@ -108,7 +112,7 @@ impl BrainfuckInterpreterInterface {
                     '>' => {
                         data_pointer += 1;
                         instruction_pointer += 1;
-                        thread::sleep(Duration::from_millis(5));
+                        thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                     }
                     '<' => {
                         data_pointer -= 1;
@@ -118,28 +122,30 @@ impl BrainfuckInterpreterInterface {
                     '+' => {
                         data_arc.lock().unwrap()[data_pointer] += 1;
                         instruction_pointer += 1;
-                        thread::sleep(Duration::from_millis(5));
+                        thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                     }
                     '-' => {
                         data_arc.lock().unwrap()[data_pointer] -= 1;
                         instruction_pointer += 1;
-                        thread::sleep(Duration::from_millis(5));
+                        thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                     }
                     '.' => {
                         *output_brainfuck.lock().unwrap() +=
                             &*String::from(data_arc.lock().unwrap()[data_pointer] as char);
                         instruction_pointer += 1;
-                        thread::sleep(Duration::from_millis(5));
+                        thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                     }
                     ',' => {
-                        data_arc.lock().unwrap()[data_pointer] =
-                            input_text.lock().unwrap().chars().nth(0).unwrap() as u8; // TODO: Throw error on empty input or wait
-                        let mut locked_text = input_text.lock().unwrap();
-                        if !locked_text.is_empty() {
-                            locked_text.drain(..1);
+                        if !data_arc.lock().unwrap().is_empty() {
+                            data_arc.lock().unwrap()[data_pointer] =
+                                input_text.lock().unwrap().chars().nth(0).unwrap() as u8;
+                            let mut locked_text = input_text.lock().unwrap();
+                            if !locked_text.is_empty() {
+                                locked_text.drain(..1);
+                            }
+                            instruction_pointer += 1;
+                            thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                         }
-                        instruction_pointer += 1;
-                        thread::sleep(Duration::from_millis(5));
                     }
                     '[' => {
                         if data_arc.lock().unwrap()[data_pointer] == 0 {
@@ -157,10 +163,10 @@ impl BrainfuckInterpreterInterface {
                                 pos += 1;
                             }
                             instruction_pointer = pos;
-                            thread::sleep(Duration::from_millis(5));
+                            thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                         } else {
                             instruction_pointer += 1;
-                            thread::sleep(Duration::from_millis(5));
+                            thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                         }
                     }
                     ']' => {
@@ -184,10 +190,10 @@ impl BrainfuckInterpreterInterface {
                                 pos -= 1;
                             }
                             instruction_pointer = pos + 1;
-                            thread::sleep(Duration::from_millis(5));
+                            thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                         } else {
                             instruction_pointer += 1;
-                            thread::sleep(Duration::from_millis(5));
+                            thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                         }
                     }
                     _ => {
@@ -224,91 +230,102 @@ impl eframe::App for BrainfuckInterpreterInterface {
             });
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| { // TODO: Add scroll
-            ui.horizontal(|ui| {
-                ui.heading("Brainfuck code");
+        egui::CentralPanel::default().show(ctx, |ui| {
+            egui::ScrollArea::vertical()
+                .auto_shrink([false; 2]) // Prevent auto-shrinking of the scroll area
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.heading("Brainfuck code");
 
-                if ui.button("Run").clicked() && !*self.timer_running.lock().unwrap() {
-                    self.start_interpreter();
-                };
-                if ui.button("Stop").clicked() && *self.timer_running.lock().unwrap() {
-                    self.stop_interpreter();
-                };
-            });
+                        if ui.button("Run").clicked() && !*self.timer_running.lock().unwrap() {
+                            self.start_interpreter();
+                        };
+                        if ui.button("Stop").clicked() && *self.timer_running.lock().unwrap() {
+                            self.stop_interpreter();
+                        };
+                    });
 
-            let available_size = Vec2::new(ui.available_width(), 0.0);
-            if !*self.timer_running.lock().unwrap() {
-                ui.add_sized(
-                    available_size,
-                    egui::TextEdit::multiline(&mut *self.input_brainfuck.lock().unwrap())
-                        .hint_text("Type brainfuck here..."),
-                );
-            } else {
-                ui.add_sized(
-                    available_size,
-                    egui::TextEdit::multiline(&mut *self.input_brainfuck.lock().unwrap())
-                        .hint_text("Type brainfuck here...")
-                        .interactive(false),
-                );
-            }
+                    let available_size = Vec2::new(ui.available_width(), 0.0);
+                    if !*self.timer_running.lock().unwrap() {
+                        ui.add_sized(
+                            available_size,
+                            egui::TextEdit::multiline(&mut *self.input_brainfuck.lock().unwrap())
+                                .hint_text("Type brainfuck here..."),
+                        );
+                    } else {
+                        ui.add_sized(
+                            available_size,
+                            egui::TextEdit::multiline(&mut *self.input_brainfuck.lock().unwrap())
+                                .hint_text("Type brainfuck here...")
+                                .interactive(false),
+                        );
+                    }
 
-            ui.add_space(10.0);
-            let box_size = 30.0;
-            let highlight_color = Color32::RED;
-
-            ui.horizontal(|ui| {
-                // Left side panel: Text and Input
-                ui.vertical(|ui| {
-                    ui.heading("Output");
-                    ui.add(
-                        egui::TextEdit::multiline(&mut *self.output.lock().unwrap())
-                            .hint_text("This is output-only")
-                            .interactive(false),
-                    );
                     ui.add_space(10.0);
-                    ui.heading("Input");
-                    ui.text_edit_multiline(&mut *self.input_text.lock().unwrap());
-                });
+                    let box_size = 30.0;
+                    let highlight_color = Color32::RED;
 
-                // Right side panel: Dynamic boxes
-                ui.vertical(|ui| {
-                    // Adjust spacing between boxes
-                    ui.spacing_mut().item_spacing = egui::vec2(1.0, 1.0);
-
-                    ui.horizontal_wrapped(|ui| {
-                        for (i, value) in self.data.lock().unwrap().iter().enumerate() {
-                            let (_, rect) = ui.allocate_space([box_size, box_size].into());
-
-                            let rect_color = if i == *self.box_index.lock().unwrap() as usize {
-                                highlight_color
-                            } else {
-                                Color32::GRAY
-                            };
-
-                            // Draw the box
-                            ui.painter().rect_filled(rect, 0.0, rect_color);
-
-                            // Draw the value in the center of the box
-                            ui.painter().text(
-                                rect.center(),
-                                egui::Align2::CENTER_CENTER,
-                                format!("{}", value),
-                                egui::TextStyle::Body.resolve(ui.style()),
-                                Color32::WHITE,
+                    ui.horizontal(|ui| {
+                        // Left side panel: Text and Input
+                        ui.vertical(|ui| {
+                            ui.heading("Output");
+                            ui.add(
+                                egui::TextEdit::multiline(&mut *self.output.lock().unwrap())
+                                    .hint_text("This is output-only")
+                                    .interactive(false),
                             );
-                        }
+                            ui.add_space(10.0);
+                            ui.heading("Input");
+                            ui.text_edit_multiline(&mut *self.input_text.lock().unwrap());
+                            ui.add_space(10.0);
+                            ui.add_enabled_ui(!*self.timer_running.lock().unwrap(), |ui| {
+                                ui.style_mut().spacing.slider_width = 200.0;
+                                ui.add(
+                                egui::Slider::new(&mut *self.delay.lock().unwrap(), 0 ..=1000)
+                                    .text("Delay"),
+                            );
+                            });
+                        });
+
+                        // Right side panel: Dynamic boxes
+                        ui.vertical(|ui| {
+                            // Adjust spacing between boxes
+                            ui.spacing_mut().item_spacing = egui::vec2(1.0, 1.0);
+
+                            ui.horizontal_wrapped(|ui| {
+                                for (i, value) in self.data.lock().unwrap().iter().enumerate() {
+                                    let (_, rect) = ui.allocate_space([box_size, box_size].into());
+
+                                    let rect_color =
+                                        if i == *self.box_index.lock().unwrap() as usize {
+                                            highlight_color
+                                        } else {
+                                            Color32::GRAY
+                                        };
+
+                                    // Draw the box
+                                    ui.painter().rect_filled(rect, 0.0, rect_color);
+
+                                    // Draw the value in the center of the box
+                                    ui.painter().text(
+                                        rect.center(),
+                                        egui::Align2::CENTER_CENTER,
+                                        format!("{}", value),
+                                        egui::TextStyle::Body.resolve(ui.style()),
+                                        Color32::WHITE,
+                                    );
+                                }
+                            });
+                        });
                     });
                 });
-            });
-
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 powered_by_egui_and_eframe(ui);
                 egui::warn_if_debug_build(ui);
             });
-
-            // Request a repaint to keep the animation going
-            ctx.request_repaint();
         });
+        // Request a repaint to keep the animation going
+        ctx.request_repaint();
     }
 
     /// Called by the framework to save state before shutdown.
@@ -333,5 +350,4 @@ fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
         "Source code",
         "https://github.com/Bombinisss/BrainfuckInterpreter/",
     );
-    ui.separator();
 }
