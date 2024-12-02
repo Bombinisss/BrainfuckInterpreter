@@ -2,7 +2,7 @@ use egui::{Color32, Vec2};
 use egui_file_dialog::FileDialog;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// We derive Deserialize/Serialize, so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -18,7 +18,9 @@ pub struct BrainfuckInterpreterInterface {
     #[serde(skip)]
     pub(crate) delay: Arc<Mutex<u64>>,
     #[serde(skip)]
-    last_update_time: Instant,
+    pub(crate) data_size: usize,
+    #[serde(skip)]
+    pub(crate) power: u32,
     #[serde(skip)]
     pub(crate) input_text: Arc<Mutex<String>>,
     #[serde(skip)]
@@ -46,7 +48,8 @@ impl Default for BrainfuckInterpreterInterface {
             letter_index: Arc::new(Mutex::new(0)),
             box_index: Arc::new(Mutex::new(0)),
             delay: Arc::new(Mutex::new(5u64)),
-            last_update_time: std::time::Instant::now(),
+            data_size: 256,
+            power: 0,
             input_text: Arc::new(Mutex::new("".to_string())),
             input_brainfuck: Arc::new(Mutex::new("".to_string())),
             output: Arc::new(Mutex::new("".to_string())),
@@ -120,11 +123,17 @@ impl BrainfuckInterpreterInterface {
                         thread::sleep(Duration::from_millis(5));
                     }
                     '+' => {
+                        if (data_pointer >= data_arc.lock().unwrap().len()) {
+                            data_arc.lock().unwrap().resize(data_pointer + 1, 0);
+                        }
                         data_arc.lock().unwrap()[data_pointer] += 1;
                         instruction_pointer += 1;
                         thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                     }
                     '-' => {
+                        if (data_pointer >= data_arc.lock().unwrap().len()) {
+                            data_arc.lock().unwrap().resize(data_pointer + 1, 0);
+                        }
                         data_arc.lock().unwrap()[data_pointer] -= 1;
                         instruction_pointer += 1;
                         thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
@@ -201,6 +210,9 @@ impl BrainfuckInterpreterInterface {
                     }
                 }
 
+                if (data_pointer > data_arc.lock().unwrap().len()) {
+                            data_arc.lock().unwrap().resize(data_pointer, 0);
+                        }
                 *box_index_arc.lock().unwrap() = data_pointer;
             }
             return;
@@ -281,9 +293,30 @@ impl eframe::App for BrainfuckInterpreterInterface {
                             ui.add_enabled_ui(!*self.timer_running.lock().unwrap(), |ui| {
                                 ui.style_mut().spacing.slider_width = 200.0;
                                 ui.add(
-                                egui::Slider::new(&mut *self.delay.lock().unwrap(), 0 ..=1000)
-                                    .text("Delay"),
-                            );
+                                    egui::Slider::new(&mut *self.delay.lock().unwrap(), 0..=1000)
+                                        .text("Delay"),
+                                );
+                                ui.horizontal(|ui| {
+                                    ui.label(format!(
+                                        "Memory size: {}",
+                                        self.data.lock().unwrap().len()
+                                    ));
+                                    if ui.button("+").clicked() {
+                                        let data_len:i64 = self.data.lock().unwrap().len() as i64;
+                                        let new_size: i64 = data_len + 2usize.pow(self.power) as i64;
+                                        self.data.lock().unwrap().resize(new_size as usize, 0);
+                                    }
+                                    if ui.button("-").clicked() {
+                                        let data_len:i64 = self.data.lock().unwrap().len() as i64;
+                                        let mut new_size: i64 = data_len - 2usize.pow(self.power) as i64;
+                                        new_size = new_size.max(2);
+                                        self.data.lock().unwrap().resize(new_size as usize, 0);
+                                    }
+                                    ui.style_mut().spacing.slider_width = 51.0;
+                                    ui.add(
+                                        egui::Slider::new(&mut self.power, 0..=16).text("Power"),
+                                    );
+                                })
                             });
                         });
 
@@ -293,27 +326,34 @@ impl eframe::App for BrainfuckInterpreterInterface {
                             ui.spacing_mut().item_spacing = egui::vec2(1.0, 1.0);
 
                             ui.horizontal_wrapped(|ui| {
-                                for (i, value) in self.data.lock().unwrap().iter().enumerate() {
+                                let clip_rect = ui.clip_rect(); // Get the visible area
+                                let data = self.data.lock().unwrap(); // Lock the data for access
+
+                                for (i, value) in data.iter().enumerate() {
+                                    // Allocate space for the current box and get its rectangle
                                     let (_, rect) = ui.allocate_space([box_size, box_size].into());
 
-                                    let rect_color =
-                                        if i == *self.box_index.lock().unwrap() as usize {
-                                            highlight_color
-                                        } else {
-                                            Color32::GRAY
-                                        };
+                                    // Check if the box is within the visible area
+                                    if rect.intersects(clip_rect) {
+                                        let rect_color =
+                                            if i == *self.box_index.lock().unwrap() as usize {
+                                                highlight_color
+                                            } else {
+                                                Color32::GRAY
+                                            };
 
-                                    // Draw the box
-                                    ui.painter().rect_filled(rect, 0.0, rect_color);
+                                        // Draw the box
+                                        ui.painter().rect_filled(rect, 0.0, rect_color);
 
-                                    // Draw the value in the center of the box
-                                    ui.painter().text(
-                                        rect.center(),
-                                        egui::Align2::CENTER_CENTER,
-                                        format!("{}", value),
-                                        egui::TextStyle::Body.resolve(ui.style()),
-                                        Color32::WHITE,
-                                    );
+                                        // Draw the value in the center of the box
+                                        ui.painter().text(
+                                            rect.center(),
+                                            egui::Align2::CENTER_CENTER,
+                                            format!("{}", value),
+                                            egui::TextStyle::Body.resolve(ui.style()),
+                                            Color32::WHITE,
+                                        );
+                                    }
                                 }
                             });
                         });
