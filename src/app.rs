@@ -1,37 +1,22 @@
 use egui::{Color32, Vec2};
 use egui_file_dialog::FileDialog;
 use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::Duration;
+use std::{fs, thread};
 
 /// We derive Deserialize/Serialize, so we can persist app state on shutdown.
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct BrainfuckInterpreterInterface {
     pub(crate) path: String,
-    #[serde(skip)]
     file_dialog: FileDialog,
-    #[serde(skip)]
     pub(crate) letter_index: Arc<Mutex<usize>>,
-    #[serde(skip)]
     pub(crate) box_index: Arc<Mutex<usize>>,
-    #[serde(skip)]
     pub(crate) delay: Arc<Mutex<u64>>,
-    #[serde(skip)]
-    pub(crate) data_size: usize,
-    #[serde(skip)]
     pub(crate) power: u32,
-    #[serde(skip)]
     pub(crate) input_text: Arc<Mutex<String>>,
-    #[serde(skip)]
     pub(crate) input_brainfuck: Arc<Mutex<String>>,
-    #[serde(skip)]
     pub(crate) output: Arc<Mutex<String>>,
-    #[serde(skip)]
     pub(crate) data: Arc<Mutex<Vec<u8>>>,
-    #[serde(skip)]
     pub(crate) timer_running: Arc<Mutex<bool>>,
-    #[serde(skip)]
     pub(crate) timer_thread_handle: Option<thread::JoinHandle<()>>,
 }
 
@@ -44,11 +29,10 @@ impl Default for BrainfuckInterpreterInterface {
                 .min_size([595.0, 375.0])
                 .max_size([595.0, 375.0])
                 .resizable(false)
-                .movable(false),
+                .movable(true),
             letter_index: Arc::new(Mutex::new(0)),
             box_index: Arc::new(Mutex::new(0)),
             delay: Arc::new(Mutex::new(5u64)),
-            data_size: 256,
             power: 0,
             input_text: Arc::new(Mutex::new("".to_string())),
             input_brainfuck: Arc::new(Mutex::new("".to_string())),
@@ -62,14 +46,9 @@ impl Default for BrainfuckInterpreterInterface {
 
 impl BrainfuckInterpreterInterface {
     /// Called once before the first frame.
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-
-        if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
-        }
-
         Default::default()
     }
     pub fn start_interpreter(&mut self) {
@@ -123,17 +102,11 @@ impl BrainfuckInterpreterInterface {
                         thread::sleep(Duration::from_millis(5));
                     }
                     '+' => {
-                        if (data_pointer >= data_arc.lock().unwrap().len()) {
-                            data_arc.lock().unwrap().resize(data_pointer + 1, 0);
-                        }
                         data_arc.lock().unwrap()[data_pointer] += 1;
                         instruction_pointer += 1;
                         thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                     }
                     '-' => {
-                        if (data_pointer >= data_arc.lock().unwrap().len()) {
-                            data_arc.lock().unwrap().resize(data_pointer + 1, 0);
-                        }
                         data_arc.lock().unwrap()[data_pointer] -= 1;
                         instruction_pointer += 1;
                         thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
@@ -210,9 +183,9 @@ impl BrainfuckInterpreterInterface {
                     }
                 }
 
-                if (data_pointer > data_arc.lock().unwrap().len()) {
-                            data_arc.lock().unwrap().resize(data_pointer, 0);
-                        }
+                if data_pointer >= data_arc.lock().unwrap().len() {
+                    data_arc.lock().unwrap().resize(data_pointer + 1, 0);
+                }
                 *box_index_arc.lock().unwrap() = data_pointer;
             }
             return;
@@ -249,12 +222,49 @@ impl eframe::App for BrainfuckInterpreterInterface {
                     ui.horizontal(|ui| {
                         ui.heading("Brainfuck code");
 
-                        if ui.button("Run").clicked() && !*self.timer_running.lock().unwrap() {
-                            self.start_interpreter();
-                        };
-                        if ui.button("Stop").clicked() && *self.timer_running.lock().unwrap() {
-                            self.stop_interpreter();
-                        };
+                        let not_running = !*self.timer_running.lock().unwrap();
+
+                        ui.add_enabled_ui(not_running, |ui| {
+                            if ui.button("Run").clicked() {
+                                self.start_interpreter();
+                            };
+                        });
+
+                        ui.add_enabled_ui(!not_running, |ui| {
+                            if ui.button("Stop").clicked() && *self.timer_running.lock().unwrap() {
+                                self.stop_interpreter();
+                            };
+                        });
+
+                        ui.add_enabled_ui(not_running, |ui| {
+                            if ui.button("Select File").clicked() {
+                                self.file_dialog.select_file();
+                            }
+                            if ui.button("Clear").clicked() {
+                                self.input_brainfuck = Arc::new(Mutex::new("".to_string()));
+                            }
+                        });
+
+                        if let Some(path) = self.file_dialog.update(ctx).selected() {
+                            self.path = path
+                                .to_str()
+                                .unwrap_or_else(|| "Error: Invalid path")
+                                .to_string();
+                            self.path = self.path[4..].to_string();
+                            match fs::read_to_string(self.path.clone()) {
+                                Ok(content) => {
+                                    // Filter symbols
+                                    let filtered: String = content
+                                        .chars()
+                                        .filter(|c| {
+                                            ['[', ']', '-', '>', '+', '<', '.', ','].contains(c)
+                                        })
+                                        .collect();
+                                    self.input_brainfuck = Arc::new(Mutex::new(filtered));
+                                }
+                                Err(_e) => {}
+                            }
+                        }
                     });
 
                     let available_size = Vec2::new(ui.available_width(), 0.0);
@@ -302,13 +312,15 @@ impl eframe::App for BrainfuckInterpreterInterface {
                                         self.data.lock().unwrap().len()
                                     ));
                                     if ui.button("+").clicked() {
-                                        let data_len:i64 = self.data.lock().unwrap().len() as i64;
-                                        let new_size: i64 = data_len + 2usize.pow(self.power) as i64;
+                                        let data_len: i64 = self.data.lock().unwrap().len() as i64;
+                                        let new_size: i64 =
+                                            data_len + 2usize.pow(self.power) as i64;
                                         self.data.lock().unwrap().resize(new_size as usize, 0);
                                     }
                                     if ui.button("-").clicked() {
-                                        let data_len:i64 = self.data.lock().unwrap().len() as i64;
-                                        let mut new_size: i64 = data_len - 2usize.pow(self.power) as i64;
+                                        let data_len: i64 = self.data.lock().unwrap().len() as i64;
+                                        let mut new_size: i64 =
+                                            data_len - 2usize.pow(self.power) as i64;
                                         new_size = new_size.max(2);
                                         self.data.lock().unwrap().resize(new_size as usize, 0);
                                     }
@@ -366,11 +378,6 @@ impl eframe::App for BrainfuckInterpreterInterface {
         });
         // Request a repaint to keep the animation going
         ctx.request_repaint();
-    }
-
-    /// Called by the framework to save state before shutdown.
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, eframe::APP_KEY, self);
     }
 }
 
