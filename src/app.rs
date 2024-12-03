@@ -6,12 +6,13 @@ use std::{fs, thread};
 
 /// We derive Deserialize/Serialize, so we can persist app state on shutdown.
 pub struct BrainfuckInterpreterInterface {
-    pub(crate) path: String,
+    path: String,
     file_dialog: FileDialog,
-    pub(crate) letter_index: Arc<Mutex<usize>>,
-    pub(crate) box_index: Arc<Mutex<usize>>,
+    letter_index: Arc<Mutex<usize>>,
+    box_index: Arc<Mutex<usize>>,
     pub(crate) delay: Arc<Mutex<u64>>,
-    pub(crate) power: u32,
+    power: u32,
+    counter: usize,
     pub(crate) input_text: Arc<Mutex<String>>,
     pub(crate) input_brainfuck: Arc<Mutex<String>>,
     pub(crate) output: Arc<Mutex<String>>,
@@ -34,6 +35,7 @@ impl Default for BrainfuckInterpreterInterface {
             box_index: Arc::new(Mutex::new(0)),
             delay: Arc::new(Mutex::new(5u64)),
             power: 0,
+            counter: 0,
             input_text: Arc::new(Mutex::new("".to_string())),
             input_brainfuck: Arc::new(Mutex::new("".to_string())),
             output: Arc::new(Mutex::new("".to_string())),
@@ -235,10 +237,11 @@ impl eframe::App for BrainfuckInterpreterInterface {
                                 self.stop_interpreter();
                             };
                         });
-
+                        
                         ui.add_enabled_ui(not_running, |ui| {
                             if ui.button("Select File").clicked() {
                                 self.file_dialog.select_file();
+                                self.counter += 2;
                             }
                             if ui.button("Clear").clicked() {
                                 self.input_brainfuck = Arc::new(Mutex::new("".to_string()));
@@ -260,7 +263,10 @@ impl eframe::App for BrainfuckInterpreterInterface {
                                             ['[', ']', '-', '>', '+', '<', '.', ','].contains(c)
                                         })
                                         .collect();
-                                    self.input_brainfuck = Arc::new(Mutex::new(filtered));
+                                    if self.counter > 0 {
+                                        self.input_brainfuck = Arc::new(Mutex::new(filtered));
+                                        self.counter -= 1 ;
+                                    }
                                 }
                                 Err(_e) => {}
                             }
@@ -268,20 +274,14 @@ impl eframe::App for BrainfuckInterpreterInterface {
                     });
 
                     let available_size = Vec2::new(ui.available_width(), 0.0);
-                    if !*self.timer_running.lock().unwrap() {
-                        ui.add_sized(
-                            available_size,
-                            egui::TextEdit::multiline(&mut *self.input_brainfuck.lock().unwrap())
-                                .hint_text("Type brainfuck here..."),
-                        );
-                    } else {
-                        ui.add_sized(
-                            available_size,
-                            egui::TextEdit::multiline(&mut *self.input_brainfuck.lock().unwrap())
-                                .hint_text("Type brainfuck here...")
-                                .interactive(false),
-                        );
-                    }
+
+                    ui.add_sized(
+                        available_size,
+                        egui::TextEdit::multiline(&mut *self.input_brainfuck.lock().unwrap())
+                            .hint_text("Type brainfuck here...")
+                            .interactive(!*self.timer_running.lock().unwrap())
+                            .font(egui::FontId::new(18.0, egui::FontFamily::Proportional)),
+                    );
 
                     ui.add_space(10.0);
                     let box_size = 30.0;

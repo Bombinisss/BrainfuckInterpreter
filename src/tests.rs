@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
     use crate::BrainfuckInterpreterInterface;
     
     #[test]
@@ -29,6 +30,7 @@ mod tests {
     fn test_nested_loops() {
         let mut interface = BrainfuckInterpreterInterface::default();
         *interface.input_brainfuck.lock().unwrap() = "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++.".to_string();
+        interface.delay = Arc::new(Mutex::new(0u64));
         interface.start_interpreter();
         if let Some(handle) = interface.timer_thread_handle.take() {
             handle.join().unwrap();
