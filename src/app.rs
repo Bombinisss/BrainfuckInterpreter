@@ -351,11 +351,15 @@ impl eframe::App for BrainfuckInterpreterInterface {
                                             if i == *self.box_index.lock().unwrap() as usize {
                                                 highlight_color
                                             } else {
-                                                Color32::GRAY
+                                                if ctx.style().visuals.dark_mode {
+                                                    Color32::DARK_GRAY
+                                                } else {
+                                                    Color32::GRAY
+                                                }
                                             };
 
                                         // Draw the box
-                                        ui.painter().rect_filled(rect, 0.0, rect_color);
+                                        ui.painter().rect_filled(rect, 1.2, rect_color);
 
                                         // Draw the value in the center of the box
                                         ui.painter().text(
@@ -363,7 +367,11 @@ impl eframe::App for BrainfuckInterpreterInterface {
                                             egui::Align2::CENTER_CENTER,
                                             format!("{}", value),
                                             egui::TextStyle::Body.resolve(ui.style()),
-                                            Color32::WHITE,
+                                            if ctx.style().visuals.dark_mode {
+                                                Color32::GRAY
+                                            } else {
+                                                Color32::WHITE
+                                            },
                                         );
                                     }
                                 }
