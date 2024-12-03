@@ -61,6 +61,7 @@ impl BrainfuckInterpreterInterface {
         let input_text = Arc::clone(&self.input_text);
         let output_brainfuck = Arc::clone(&self.output);
         let delay_arc = Arc::clone(&self.delay);
+        let letter_index_arc = Arc::clone(&self.letter_index);
 
         if let Some(handle) = self.timer_thread_handle.take() {
             handle.join().unwrap();
@@ -189,6 +190,7 @@ impl BrainfuckInterpreterInterface {
                     data_arc.lock().unwrap().resize(data_pointer + 1, 0);
                 }
                 *box_index_arc.lock().unwrap() = data_pointer;
+                *letter_index_arc.lock().unwrap() = instruction_pointer;
             }
             return;
         }));
@@ -237,7 +239,7 @@ impl eframe::App for BrainfuckInterpreterInterface {
                                 self.stop_interpreter();
                             };
                         });
-                        
+
                         ui.add_enabled_ui(not_running, |ui| {
                             if ui.button("Select File").clicked() {
                                 self.file_dialog.select_file();
@@ -265,7 +267,7 @@ impl eframe::App for BrainfuckInterpreterInterface {
                                         .collect();
                                     if self.counter > 0 {
                                         self.input_brainfuck = Arc::new(Mutex::new(filtered));
-                                        self.counter -= 1 ;
+                                        self.counter -= 1;
                                     }
                                 }
                                 Err(_e) => {}
@@ -275,13 +277,47 @@ impl eframe::App for BrainfuckInterpreterInterface {
 
                     let available_size = Vec2::new(ui.available_width(), 0.0);
 
-                    ui.add_sized(
-                        available_size,
-                        egui::TextEdit::multiline(&mut *self.input_brainfuck.lock().unwrap())
-                            .hint_text("Type brainfuck here...")
-                            .interactive(!*self.timer_running.lock().unwrap())
-                            .font(egui::FontId::new(18.0, egui::FontFamily::Proportional)),
-                    );
+                    if !*self.timer_running.lock().unwrap() {
+                        ui.add_sized(
+                            available_size,
+                            egui::TextEdit::multiline(&mut *self.input_brainfuck.lock().unwrap())
+                                .hint_text("Type brainfuck here...")
+                                .interactive(!*self.timer_running.lock().unwrap())
+                                .font(egui::FontId::new(14.0, egui::FontFamily::Monospace)),
+                        );
+                    } else {
+                        let letter_index = *self.letter_index.lock().unwrap(); //TODO: fix lag on big delay
+                        let input_brainfuck = self.input_brainfuck.lock().unwrap();
+                        let text = &*input_brainfuck;
+
+                        let start_idx = text
+                            .char_indices()
+                            .nth(letter_index)
+                            .map(|(idx, _)| idx)
+                            .unwrap_or(text.len());
+                        let end_idx = text
+                            .char_indices()
+                            .nth(letter_index + 1)
+                            .map(|(idx, _)| idx)
+                            .unwrap_or(text.len());
+
+                        // Split the text
+                        let before = &text[..start_idx];
+                        let highlighted = &text[start_idx..end_idx];
+                        let after = &text[end_idx..];
+
+                        // Create RichText for each segment
+                        let before_text = egui::RichText::new(before);
+                        let highlighted_text =
+                            egui::RichText::new(highlighted).background_color(Color32::RED);
+                        let after_text = egui::RichText::new(after);
+
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(before_text);
+                            ui.label(highlighted_text);
+                            ui.label(after_text);
+                        });
+                    }
 
                     ui.add_space(10.0);
                     let box_size = 30.0;
@@ -347,16 +383,15 @@ impl eframe::App for BrainfuckInterpreterInterface {
 
                                     // Check if the box is within the visible area
                                     if rect.intersects(clip_rect) {
-                                        let rect_color =
-                                            if i == *self.box_index.lock().unwrap() as usize {
-                                                highlight_color
+                                        let rect_color = if i == *self.box_index.lock().unwrap() {
+                                            highlight_color
+                                        } else {
+                                            if ctx.style().visuals.dark_mode {
+                                                Color32::DARK_GRAY
                                             } else {
-                                                if ctx.style().visuals.dark_mode {
-                                                    Color32::DARK_GRAY
-                                                } else {
-                                                    Color32::GRAY
-                                                }
-                                            };
+                                                Color32::GRAY
+                                            }
+                                        };
 
                                         // Draw the box
                                         ui.painter().rect_filled(rect, 1.2, rect_color);
