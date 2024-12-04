@@ -88,4 +88,14 @@ mod tests {
             handle.join().unwrap();
         }
     }
+    
+    #[test]
+    fn test_interpreter_try_break5() {
+        let mut interface = BrainfuckInterpreterInterface::default();
+        *interface.input_brainfuck.lock().unwrap() = "++[+.+.++]".to_string();
+        interface.start_interpreter();
+        if let Some(handle) = interface.timer_thread_handle.take() {
+            handle.join().unwrap();
+        }
+    }
 }
