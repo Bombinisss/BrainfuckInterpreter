@@ -48,4 +48,44 @@ mod tests {
         }
         assert_eq!(*interface.timer_running.lock().unwrap(), false);
     }
+    
+    #[test]
+    fn test_interpreter_try_break1() {
+        let mut interface = BrainfuckInterpreterInterface::default();
+        *interface.input_brainfuck.lock().unwrap() = "<<<<".to_string();
+        interface.start_interpreter();
+        if let Some(handle) = interface.timer_thread_handle.take() {
+            handle.join().unwrap();
+        }
+    }
+    
+    #[test]
+    fn test_interpreter_try_break2() {
+        let mut interface = BrainfuckInterpreterInterface::default();
+        *interface.input_brainfuck.lock().unwrap() = "+++[,]".to_string();
+        interface.start_interpreter();
+        if let Some(handle) = interface.timer_thread_handle.take() {
+            handle.join().unwrap();
+        }
+    }
+    
+    #[test]
+    fn test_interpreter_try_break3() {
+        let mut interface = BrainfuckInterpreterInterface::default();
+        *interface.input_brainfuck.lock().unwrap() = "[[]".to_string();
+        interface.start_interpreter();
+        if let Some(handle) = interface.timer_thread_handle.take() {
+            handle.join().unwrap();
+        }
+    }
+    
+    #[test]
+    fn test_interpreter_try_break4() {
+        let mut interface = BrainfuckInterpreterInterface::default();
+        *interface.input_brainfuck.lock().unwrap() = "+[+.]".to_string();
+        interface.start_interpreter();
+        if let Some(handle) = interface.timer_thread_handle.take() {
+            handle.join().unwrap();
+        }
+    }
 }

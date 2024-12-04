@@ -2,5 +2,6 @@
 
 mod app;
 mod tests;
+mod interpreter;
 
 pub use app::BrainfuckInterpreterInterface;
