@@ -17,6 +17,7 @@ pub struct BrainfuckInterpreterInterface {
     pub(crate) output: Arc<Mutex<String>>,
     pub(crate) data: Arc<Mutex<Vec<u8>>>,
     pub(crate) timer_running: Arc<Mutex<bool>>,
+    pub(crate) warn: Arc<Mutex<bool>>,
     pub(crate) timer_thread_handle: Option<thread::JoinHandle<()>>,
 }
 
@@ -40,6 +41,7 @@ impl Default for BrainfuckInterpreterInterface {
             output: Arc::new(Mutex::new("".to_string())),
             data: Arc::new(Mutex::new(vec![0; 256])),
             timer_running: Arc::new(Mutex::new(false)),
+            warn: Arc::new(Mutex::new(false)),
             timer_thread_handle: None,
         }
     }
@@ -323,6 +325,28 @@ impl eframe::App for BrainfuckInterpreterInterface {
                 powered_by_egui_and_eframe(ui);
                 egui::warn_if_debug_build(ui);
             });
+
+            if *self.warn.lock().unwrap() {
+                egui::Window::new("Warning")
+                    .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+                    .resizable(false)
+                    .collapsible(false)
+                    .title_bar(false)
+                    .auto_sized()
+                    .show(ctx, |ui| {
+                        ui.vertical_centered(|ui| {
+                            ui.label(
+                                egui::RichText::new("Invalid loop structure")
+                                    .color(Color32::RED)
+                                    .size(20.0),
+                            );
+                            ui.add_space(5.0);
+                            if ui.button("Okay").clicked() {
+                                *self.warn.lock().unwrap() = false;
+                            }
+                        });
+                    });
+            }
         });
         // Request a repaint to keep the animation going
         ctx.request_repaint();

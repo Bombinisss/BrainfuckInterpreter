@@ -1,9 +1,22 @@
+use crate::BrainfuckInterpreterInterface;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use crate::BrainfuckInterpreterInterface;
 
 impl BrainfuckInterpreterInterface {
+    fn are_brackets_balanced(s: &str) -> bool {
+        let mut open_count = 0;
+        let mut close_count = 0;
+
+        for c in s.chars() {
+            match c {
+                '[' => open_count += 1,
+                ']' => close_count += 1,
+                _ => {}
+            }
+        }
+        open_count == close_count
+    }
     pub fn start_interpreter(&mut self) {
         let timer_running = Arc::clone(&self.timer_running);
         let data_arc = Arc::clone(&self.data);
@@ -20,6 +33,19 @@ impl BrainfuckInterpreterInterface {
 
         if *timer_running.lock().unwrap() || input_brainfuck.lock().unwrap().is_empty() {
             return; // Timer is already running or input is empty
+        }
+
+        let loop_check = self
+            .input_brainfuck
+            .lock()
+            .unwrap()
+            .chars()
+            .as_str()
+            .to_string();
+
+        if !Self::are_brackets_balanced(&loop_check) {
+            *self.warn.lock().unwrap() = true;
+            return;
         }
 
         data_arc.lock().unwrap().fill(0);
@@ -56,17 +82,19 @@ impl BrainfuckInterpreterInterface {
                         instruction_pointer += 1;
                     }
                     '+' => {
-                        if data_arc.lock().unwrap()[data_pointer]==255 {
+                        if data_arc.lock().unwrap()[data_pointer] == 255 {
                             data_arc.lock().unwrap()[data_pointer] = 0;
+                        } else {
+                            data_arc.lock().unwrap()[data_pointer] += 1;
                         }
-                        else { data_arc.lock().unwrap()[data_pointer] += 1; }
                         instruction_pointer += 1;
                     }
                     '-' => {
-                        if data_arc.lock().unwrap()[data_pointer]==0 {
+                        if data_arc.lock().unwrap()[data_pointer] == 0 {
                             data_arc.lock().unwrap()[data_pointer] = 255;
+                        } else {
+                            data_arc.lock().unwrap()[data_pointer] -= 1;
                         }
-                        else { data_arc.lock().unwrap()[data_pointer] -= 1; }
                         instruction_pointer += 1;
                     }
                     '.' => {
@@ -141,7 +169,7 @@ impl BrainfuckInterpreterInterface {
                 }
                 *box_index_arc.lock().unwrap() = data_pointer;
                 *letter_index_arc.lock().unwrap() = instruction_pointer;
-                
+
                 if !sleep_switch {
                     thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                     sleep_switch = false;
