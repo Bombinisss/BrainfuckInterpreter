@@ -103,6 +103,19 @@ impl eframe::App for BrainfuckInterpreterInterface {
                             if ui.button("Clear").clicked() {
                                 self.input_brainfuck = Arc::new(Mutex::new("".to_string()));
                             }
+                            if ui.button("Clear letters").clicked() {
+                                let filtered: String = self
+                                    .input_brainfuck
+                                    .lock()
+                                    .unwrap()
+                                    .clone()
+                                    .chars()
+                                    .filter(|c| {
+                                        ['[', ']', '-', '>', '+', '<', '.', ','].contains(c)
+                                    })
+                                    .collect();
+                                self.input_brainfuck = Arc::new(Mutex::new(filtered));
+                            }
                         });
 
                         if let Some(path) = self.file_dialog.update(ctx).selected() {
@@ -222,6 +235,8 @@ impl eframe::App for BrainfuckInterpreterInterface {
                                 })
                             });
 
+                            ui.add_space(10.0);
+                            
                             ui.horizontal(|ui| {
                                 let not_running = !*self.timer_running.lock().unwrap();
 
@@ -246,6 +261,19 @@ impl eframe::App for BrainfuckInterpreterInterface {
                                     }
                                     if ui.button("Clear").clicked() {
                                         self.input_brainfuck = Arc::new(Mutex::new("".to_string()));
+                                    }
+                                    if ui.button("Clear letters").clicked() {
+                                        let filtered: String = self
+                                            .input_brainfuck
+                                            .lock()
+                                            .unwrap()
+                                            .clone()
+                                            .chars()
+                                            .filter(|c| {
+                                                ['[', ']', '-', '>', '+', '<', '.', ','].contains(c)
+                                            })
+                                            .collect();
+                                        self.input_brainfuck = Arc::new(Mutex::new(filtered));
                                     }
                                 });
 
