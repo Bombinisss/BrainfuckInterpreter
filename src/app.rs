@@ -70,8 +70,6 @@ impl eframe::App for BrainfuckInterpreterInterface {
             });
         });
 
-        
-        
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical()
                 .auto_shrink([false; 2]) // Prevent auto-shrinking of the scroll area
@@ -218,6 +216,60 @@ impl eframe::App for BrainfuckInterpreterInterface {
                                         egui::Slider::new(&mut self.power, 0..=16).text("Power"),
                                     );
                                 })
+                            });
+
+                            ui.horizontal(|ui| {
+                                let not_running = !*self.timer_running.lock().unwrap();
+
+                                ui.add_enabled_ui(not_running, |ui| {
+                                    if ui.button("Run").clicked() {
+                                        self.start_interpreter();
+                                    };
+                                });
+
+                                ui.add_enabled_ui(!not_running, |ui| {
+                                    if ui.button("Stop").clicked()
+                                        && *self.timer_running.lock().unwrap()
+                                    {
+                                        self.stop_interpreter();
+                                    };
+                                });
+
+                                ui.add_enabled_ui(not_running, |ui| {
+                                    if ui.button("Select File").clicked() {
+                                        self.file_dialog.select_file();
+                                        self.counter += 200;
+                                    }
+                                    if ui.button("Clear").clicked() {
+                                        self.input_brainfuck = Arc::new(Mutex::new("".to_string()));
+                                    }
+                                });
+
+                                if let Some(path) = self.file_dialog.update(ctx).selected() {
+                                    self.path = path
+                                        .to_str()
+                                        .unwrap_or_else(|| "Error: Invalid path")
+                                        .to_string();
+                                    self.path = self.path[4..].to_string();
+                                    match fs::read_to_string(self.path.clone()) {
+                                        Ok(content) => {
+                                            // Filter symbols
+                                            let filtered: String = content
+                                                .chars()
+                                                .filter(|c| {
+                                                    ['[', ']', '-', '>', '+', '<', '.', ',']
+                                                        .contains(c)
+                                                })
+                                                .collect();
+                                            if self.counter > 0 {
+                                                self.input_brainfuck =
+                                                    Arc::new(Mutex::new(filtered));
+                                                self.counter -= 1;
+                                            }
+                                        }
+                                        Err(_e) => {}
+                                    }
+                                }
                             });
                         });
 

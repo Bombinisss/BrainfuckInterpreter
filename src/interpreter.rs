@@ -31,7 +31,7 @@ impl BrainfuckInterpreterInterface {
         self.timer_thread_handle = Some(thread::spawn(move || {
             let mut data_pointer: usize = 0;
             let mut instruction_pointer: usize = 0;
-
+            let mut sleep_switch: bool = false;
             while *timer_running.lock().unwrap() {
                 if instruction_pointer >= input_brainfuck.lock().unwrap().len() {
                     *timer_running.lock().unwrap() = false;
@@ -48,31 +48,34 @@ impl BrainfuckInterpreterInterface {
                     '>' => {
                         data_pointer += 1;
                         instruction_pointer += 1;
-                        thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                     }
                     '<' => {
-                        data_pointer -= 1;
+                        if data_pointer != 0 {
+                            data_pointer -= 1;
+                        }
                         instruction_pointer += 1;
-                        thread::sleep(Duration::from_millis(5));
                     }
                     '+' => {
-                        data_arc.lock().unwrap()[data_pointer] += 1;
+                        if data_arc.lock().unwrap()[data_pointer]==255 {
+                            data_arc.lock().unwrap()[data_pointer] = 0;
+                        }
+                        else { data_arc.lock().unwrap()[data_pointer] += 1; }
                         instruction_pointer += 1;
-                        thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                     }
                     '-' => {
-                        data_arc.lock().unwrap()[data_pointer] -= 1;
+                        if data_arc.lock().unwrap()[data_pointer]==0 {
+                            data_arc.lock().unwrap()[data_pointer] = 255;
+                        }
+                        else { data_arc.lock().unwrap()[data_pointer] -= 1; }
                         instruction_pointer += 1;
-                        thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                     }
                     '.' => {
                         *output_brainfuck.lock().unwrap() +=
                             &*String::from(data_arc.lock().unwrap()[data_pointer] as char);
                         instruction_pointer += 1;
-                        thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                     }
                     ',' => {
-                        if !data_arc.lock().unwrap().is_empty() {
+                        if !input_text.lock().unwrap().is_empty() {
                             data_arc.lock().unwrap()[data_pointer] =
                                 input_text.lock().unwrap().chars().nth(0).unwrap() as u8;
                             let mut locked_text = input_text.lock().unwrap();
@@ -80,7 +83,6 @@ impl BrainfuckInterpreterInterface {
                                 locked_text.drain(..1);
                             }
                             instruction_pointer += 1;
-                            thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                         }
                     }
                     '[' => {
@@ -99,10 +101,8 @@ impl BrainfuckInterpreterInterface {
                                 pos += 1;
                             }
                             instruction_pointer = pos;
-                            thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                         } else {
                             instruction_pointer += 1;
-                            thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                         }
                     }
                     ']' => {
@@ -126,14 +126,13 @@ impl BrainfuckInterpreterInterface {
                                 pos -= 1;
                             }
                             instruction_pointer = pos + 1;
-                            thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                         } else {
                             instruction_pointer += 1;
-                            thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
                         }
                     }
                     _ => {
                         instruction_pointer += 1;
+                        sleep_switch = true;
                     }
                 }
 
@@ -142,6 +141,11 @@ impl BrainfuckInterpreterInterface {
                 }
                 *box_index_arc.lock().unwrap() = data_pointer;
                 *letter_index_arc.lock().unwrap() = instruction_pointer;
+                
+                if !sleep_switch {
+                    thread::sleep(Duration::from_millis(*delay_arc.lock().unwrap()));
+                    sleep_switch = false;
+                }
             }
             return;
         }));
