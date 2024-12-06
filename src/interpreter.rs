@@ -26,6 +26,8 @@ impl BrainfuckInterpreterInterface {
         let output_brainfuck = Arc::clone(&self.output);
         let delay_arc = Arc::clone(&self.delay);
         let letter_index_arc = Arc::clone(&self.letter_index);
+        let warn_arc = Arc::clone(&self.warn);
+        let warn_message_arc = Arc::clone(&self.warn_message);
 
         if let Some(handle) = self.timer_thread_handle.take() {
             handle.join().unwrap();
@@ -45,6 +47,7 @@ impl BrainfuckInterpreterInterface {
 
         if !Self::are_brackets_balanced(&loop_check) {
             *self.warn.lock().unwrap() = true;
+            *self.warn_message.lock().unwrap() = "Invalid loop structure".to_string();
             return;
         }
 
@@ -78,6 +81,11 @@ impl BrainfuckInterpreterInterface {
                     '<' => {
                         if data_pointer != 0 {
                             data_pointer -= 1;
+                        }
+                        else { 
+                            *warn_arc.lock().unwrap() = true;
+                            *warn_message_arc.lock().unwrap() = "Tried to go out of bounds".to_string();
+                            return;
                         }
                         instruction_pointer += 1;
                     }

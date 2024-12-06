@@ -18,6 +18,7 @@ pub struct BrainfuckInterpreterInterface {
     pub(crate) data: Arc<Mutex<Vec<u8>>>,
     pub(crate) timer_running: Arc<Mutex<bool>>,
     pub(crate) warn: Arc<Mutex<bool>>,
+    pub(crate) warn_message: Arc<Mutex<String>>,
     pub(crate) timer_thread_handle: Option<thread::JoinHandle<()>>,
 }
 
@@ -42,6 +43,7 @@ impl Default for BrainfuckInterpreterInterface {
             data: Arc::new(Mutex::new(vec![0; 256])),
             timer_running: Arc::new(Mutex::new(false)),
             warn: Arc::new(Mutex::new(false)),
+            warn_message: Arc::new(Mutex::new("".to_string())),
             timer_thread_handle: None,
         }
     }
@@ -336,7 +338,7 @@ impl eframe::App for BrainfuckInterpreterInterface {
                     .show(ctx, |ui| {
                         ui.vertical_centered(|ui| {
                             ui.label(
-                                egui::RichText::new("Invalid loop structure")
+                                egui::RichText::new(self.warn_message.lock().unwrap().clone())
                                     .color(Color32::RED)
                                     .size(20.0),
                             );
