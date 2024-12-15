@@ -1,4 +1,4 @@
-use egui::{Color32, Vec2};
+use egui::{Color32, Context, Vec2};
 use egui_file_dialog::FileDialog;
 use std::sync::{Arc, Mutex};
 use std::{fs, thread};
@@ -55,6 +55,59 @@ impl BrainfuckInterpreterInterface {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
         Default::default()
+    }
+
+    pub fn set_path_multi(&mut self, ctx: &Context) {
+        if let Some(path) = self.file_dialog.update(ctx).selected().clone() {
+            #[cfg(target_os = "windows")]
+            {
+                self.path = path
+                    .to_str()
+                    .unwrap_or_else(|| "Error: Invalid path")
+                    .to_string();
+                self.path = self.path[4..].to_string();
+                match fs::read_to_string(self.path.clone()) {
+                    Ok(content) => {
+                        // Filter symbols
+                        let filtered: String = content
+                            .chars()
+                            .filter(|c| {
+                                ['[', ']', '-', '>', '+', '<', '.', ','].contains(c)
+                            })
+                            .collect();
+                        if self.counter > 0 {
+                            self.input_brainfuck = Arc::new(Mutex::new(filtered));
+                            self.counter -= 1;
+                        }
+                    }
+                    Err(_e) => {}
+                }
+            }
+
+            #[cfg(target_os = "linux")]
+            {
+                self.path = path
+                    .to_str()
+                    .unwrap_or_else(|| "Error: Invalid path")
+                    .to_string();
+                match fs::read_to_string(self.path.clone()) {
+                    Ok(content) => {
+                        // Filter symbols
+                        let filtered: String = content
+                            .chars()
+                            .filter(|c| {
+                                ['[', ']', '-', '>', '+', '<', '.', ','].contains(c)
+                            })
+                            .collect();
+                        if self.counter > 0 {
+                            self.input_brainfuck = Arc::new(Mutex::new(filtered));
+                            self.counter -= 1;
+                        }
+                    }
+                    Err(_e) => {}
+                }
+            }
+        }
     }
 }
 
@@ -118,29 +171,7 @@ impl eframe::App for BrainfuckInterpreterInterface {
                             }
                         });
 
-                        if let Some(path) = self.file_dialog.update(ctx).selected() {
-                            self.path = path
-                                .to_str()
-                                .unwrap_or_else(|| "Error: Invalid path")
-                                .to_string();
-                            self.path = self.path[4..].to_string();
-                            match fs::read_to_string(self.path.clone()) {
-                                Ok(content) => {
-                                    // Filter symbols
-                                    let filtered: String = content
-                                        .chars()
-                                        .filter(|c| {
-                                            ['[', ']', '-', '>', '+', '<', '.', ','].contains(c)
-                                        })
-                                        .collect();
-                                    if self.counter > 0 {
-                                        self.input_brainfuck = Arc::new(Mutex::new(filtered));
-                                        self.counter -= 1;
-                                    }
-                                }
-                                Err(_e) => {}
-                            }
-                        }
+                        self.set_path_multi(ctx);
                     });
 
                     let available_size = Vec2::new(ui.available_width(), 0.0);
@@ -236,7 +267,7 @@ impl eframe::App for BrainfuckInterpreterInterface {
                             });
 
                             ui.add_space(10.0);
-                            
+
                             ui.horizontal(|ui| {
                                 let not_running = !*self.timer_running.lock().unwrap();
 
@@ -277,31 +308,7 @@ impl eframe::App for BrainfuckInterpreterInterface {
                                     }
                                 });
 
-                                if let Some(path) = self.file_dialog.update(ctx).selected() {
-                                    self.path = path
-                                        .to_str()
-                                        .unwrap_or_else(|| "Error: Invalid path")
-                                        .to_string();
-                                    self.path = self.path[4..].to_string();
-                                    match fs::read_to_string(self.path.clone()) {
-                                        Ok(content) => {
-                                            // Filter symbols
-                                            let filtered: String = content
-                                                .chars()
-                                                .filter(|c| {
-                                                    ['[', ']', '-', '>', '+', '<', '.', ',']
-                                                        .contains(c)
-                                                })
-                                                .collect();
-                                            if self.counter > 0 {
-                                                self.input_brainfuck =
-                                                    Arc::new(Mutex::new(filtered));
-                                                self.counter -= 1;
-                                            }
-                                        }
-                                        Err(_e) => {}
-                                    }
-                                }
+                                self.set_path_multi(ctx);
                             });
                         });
 
@@ -400,3 +407,4 @@ fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
         "https://github.com/Bombinisss/BrainfuckInterpreter/",
     );
 }
+
