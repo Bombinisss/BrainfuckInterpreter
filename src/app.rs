@@ -155,6 +155,9 @@ impl eframe::App for BrainfuckInterpreterInterface {
                             }
                             if ui.button("Clear").clicked() {
                                 self.input_brainfuck = Arc::new(Mutex::new("".to_string()));
+                                self.data.lock().unwrap().fill(0);
+                                self.output.lock().unwrap().clear();
+                                *self.box_index.lock().unwrap() = 0;
                             }
                             if ui.button("Clear letters").clicked() {
                                 let filtered: String = self
@@ -292,6 +295,9 @@ impl eframe::App for BrainfuckInterpreterInterface {
                                     }
                                     if ui.button("Clear").clicked() {
                                         self.input_brainfuck = Arc::new(Mutex::new("".to_string()));
+                                        self.data.lock().unwrap().fill(0);
+                                        self.output.lock().unwrap().clear();
+                                        *self.box_index.lock().unwrap() = 0;
                                     }
                                     if ui.button("Clear letters").clicked() {
                                         let filtered: String = self

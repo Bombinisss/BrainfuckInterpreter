@@ -5,18 +5,23 @@ use std::time::Duration;
 
 impl BrainfuckInterpreterInterface {
     fn are_brackets_balanced(s: &str) -> bool {
-        let mut open_count = 0;
-        let mut close_count = 0;
+        let mut balance = 0;
 
         for c in s.chars() {
             match c {
-                '[' => open_count += 1,
-                ']' => close_count += 1,
+                '[' => balance += 1,
+                ']' => {
+                    if balance == 0 {
+                        return false;
+                    }
+                    balance -= 1;
+                }
                 _ => {}
             }
         }
-        open_count == close_count
+        balance == 0
     }
+
     pub fn start_interpreter(&mut self) {
         let timer_running = Arc::clone(&self.timer_running);
         let data_arc = Arc::clone(&self.data);

@@ -7,6 +7,9 @@
 - **Program Description**: This Brainfuck interpreter displays the program's memory state and execution step by step.
 - **Visual Memory Representation**: The grid shown in the image represents the memory of the Brainfuck program.
 - **Execution Pointer**: The red cell highlights the memory location currently being executed by the interpreter.
+- **Memory Clear**: Cells/Memory is reset evey time the program is run.
+- **Memory Out Of Bounds auto fix**: When program tries to use more memory than allocated, more is allocated.
+- **Values Out Of Bounds auto fix**: When trying to add more than 255 it goes bac to 0 and in reverse too.
 
 ![image](https://github.com/user-attachments/assets/640f9168-6743-4a74-ad13-543c7455f136)
 
@@ -38,6 +41,12 @@ Despite its simplicity, Brainfuck is Turing-complete, meaning it can theoretical
 ```bash
 cargo build --release
 ```
+
+**Run:**
+```bash
+cargo run --release
+```
+
 ### Tests
 
 To run tests 
